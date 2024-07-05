@@ -1,0 +1,56 @@
+services:
+  # Platform database
+  h-database:
+    container_name: h-database
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PG_USER}
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      POSTGRES_DB: ${PG_DB}
+    volumes:
+      - ./database/data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER} -d ${PG_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  # Hasura
+  h-hasura:
+    container_name: h-hasura
+    image: hasura/graphql-engine:v2.40.2-ce.cli-migrations-v3
+    ports:
+      - 8080:8080
+    depends_on:
+      h-database:
+        condition: service_healthy
+    volumes:
+      - ./hasura/migrations:/hasura-migrations
+      - ./hasura/metadata:/hasura-metadata
+    environment:
+      HASURA_GRAPHQL_METADATA_DATABASE_URL: postgres://${PG_USER}:${PG_PASSWORD}@${PG_HOSTNAME}:${PG_PORT}/${PG_DB}
+      HASURA_GRAPHQL_DATABASE_URL: postgres://${PG_USER}:${PG_PASSWORD}@${PG_HOSTNAME}:${PG_PORT}/${PG_DB}
+      HASURA_GRAPQHL_DEV_MODE: true
+      HASURA_GRAPHQL_ENABLE_CONSOLE: true
+      HASURA_GRAPHQL_ADMIN_SECRET: $HS_ADMIN_SECRET
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  # Hasura Console CLI
+  h-hasura-console:
+    container_name: h-hasura-console
+    build:
+      context: .
+      dockerfile: images/hasura-cli/Dockerfile
+    volumes:
+      - ./hasura:/app
+    ports:
+      - 9695:9695
+      - 9693:9693
+    working_dir: /app/hasura
+    depends_on:
+      h-hasura:
+        condition: service_healthy
+    command: console --endpoint http://h-hasura:8080 --admin-secret adminsecret --no-browser --address 0.0.0.0 --console-hge-endpoint http://localhost:8080
