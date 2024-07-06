@@ -45,7 +45,7 @@ services:
       context: .
       dockerfile: images/hasura-cli/Dockerfile
     volumes:
-      - ./hasura:/app
+      - ./hasura:/app/hasura
     ports:
       - 9695:9695
       - 9693:9693
